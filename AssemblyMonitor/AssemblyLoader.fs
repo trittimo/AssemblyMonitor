@@ -22,7 +22,8 @@ module AssemblyLoader =
         
         member this.File = file
         member val Exposed = new ConcurrentDictionary<string, System.Object>()
-
+        member val InternalAssemblies = new ConcurrentDictionary<string, System.Type>()
+        member val InternalInstances = new ConcurrentDictionary<string, System.Object>()
 
         member this.SetExposedValue (key:string) (item:obj) =
             match item with
@@ -39,16 +40,21 @@ module AssemblyLoader =
 
         member this.RunOperation (operation:Operation) =
             let assembly = Assembly.LoadFile(this.File.path)
-            let instance, t = 
+            let instance, t =
+                if not (this.InternalAssemblies.ContainsKey(operation.name)) then
+                    this.InternalAssemblies.[operation.name] <- assembly.GetType(operation.name)
                 match operation.kind with
-                | "static class" -> (None, Some(assembly.GetType(operation.name)))
+                | "static class" ->
+                    (None, Some(this.InternalAssemblies.[operation.name]))
                 | "instance class" ->
-                    let asm = assembly.GetType(operation.name)
-                    let args =
-                        match operation.arguments with
-                        | null -> null
-                        | _ -> this.ConvertArguments (operation.arguments) ((asm.GetConstructors() |> Array.find(fun x -> x.GetParameters().Length = operation.arguments.Length)).GetParameters())
-                    (Some(System.Activator.CreateInstance(asm, args)), Some(asm))
+                    let asm = this.InternalAssemblies.[operation.name]
+                    if not (this.InternalInstances.ContainsKey(operation.name)) then
+                        let args =
+                            match operation.arguments with
+                            | null -> null
+                            | _ -> this.ConvertArguments (operation.arguments) ((asm.GetConstructors() |> Array.find(fun x -> x.GetParameters().Length = operation.arguments.Length)).GetParameters())    
+                        this.InternalInstances.[operation.name] <- System.Activator.CreateInstance(asm, args)
+                    (Some(this.InternalInstances.[operation.name]), Some(asm))
                 | _ -> (None, None)
                 
             match t with
