@@ -41,7 +41,7 @@ module AssemblyLoader =
             let assembly = Assembly.LoadFile(this.File.path)
             let instance, t = 
                 match operation.kind with
-                | "class" -> (None, Some(assembly.GetType(operation.name)))
+                | "static class" -> (None, Some(assembly.GetType(operation.name)))
                 | "instance class" ->
                     let asm = assembly.GetType(operation.name)
                     let args =
